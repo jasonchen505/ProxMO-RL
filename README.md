@@ -1,10 +1,28 @@
+<div align="center">
+
 # 🚀 ProxMO: Proximity-Based Multi-Turn Optimization for LLM Agent Training
+
+<p align="center">
+  <strong>ProxMO</strong> · Official Implementation
+</p>
+<p align="center">
+  <a href="https://arxiv.org/abs/2602.19225">
+    <img src="https://img.shields.io/badge/Paper-arXiv-red.svg" alt="Paper" />
+  </a>
+  <a href="https://github.com/verl-project/verl">
+    <img src="https://img.shields.io/badge/Framework-verl-blueviolet.svg" alt="Framework: verl" />
+  </a>
+  <img src="https://img.shields.io/badge/Domain-Agentic_RL_%7C_Credit_Assignment-orange.svg" alt="Domain: Agentic RL | Credit Assignment" />
+  <img src="https://img.shields.io/badge/PRs-Welcome-brightgreen.svg" alt="PRs Welcome" />
+</p>
 
 > **Practical credit assignment for multi-turn reinforcement learning with large language models**
 
 <p align="center">
   <img src="docs/proxmo/overview.png" alt="ProxMO Framework" width="100%">
 </p>
+
+</div>
 
 ---
 
@@ -305,10 +323,6 @@ These scripts handle all configuration and setup automatically. Refer to the scr
         └── run_webshop.sh
 ```
 
-## Citation
-
-If you find ProxMO helpful in your research or applications, please consider citing our paper. BibTeX will be added upon publication.
-
 ## 🎁 Key Features
 
 ### 🔄 **Multi-Turn Agent Training**
@@ -335,3 +349,26 @@ If you find ProxMO helpful in your research or applications, please consider cit
 - ✅ **Full ablation studies** proving independent mechanism contributions
 - ✅ **Hyperparameter sensitivity analysis** demonstrating robustness
 - 📋 Consistency across diverse task categories and difficulty regimes
+
+## 📚 Citation
+
+If you find ProxMO helpful in your research or applications, please consider citing our paper:
+
+```bibtex
+@article{proxmo,
+  title={Proximity-Based Multi-Turn Optimization: Practical Credit Assignment for LLM Agent Training},
+  author={Fang, Yangyi and Lin, Jiaye and Fu, Xiaoliang and Qin, Cong and Shi, Haolin and Liu, Chang and Zhao, Peilin},
+  journal={arXiv preprint arXiv:2602.19225},
+  year={2026}
+}
+```
+
+---
+
+<div align="center">
+
+**⭐ If ProxMO helps your research or applications, please give us a star! ⭐**
+
+**Note**: This is the official implementation of ProxMO. For more details, please refer to our paper ❤️.
+
+</div>
