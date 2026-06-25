@@ -53,16 +53,27 @@ ProxMO框架
 
 **核心思想**: 根据任务的empirical success rate调整梯度强度
 
-**数学公式**:
+**数学公式** (论文Eq. 4):
 ```
 w(R, p) = 1 + β · f(R, p)
+
+f(R, p) = {
+  Sigmoid(d^α) - 0.5,  if R = 1  (成功)
+  Sigmoid(-p^α) - 0.5, if R = 0  (失败)
+}
 
 其中:
 - R: 当前episode的奖励 (0或1)
 - p: 该任务组的平均成功率
-- β: 缩放因子
-- f(R, p): 基于sigmoid的调制函数
+- d = 1 - p: 失败率
+- α: 控制sigmoid陡峭度 (论文最优值: α=4.0)
+- β: 缩放因子 (论文最优值: β=0.1)
+- Sigmoid(x) = 1/(1 + e^{-x})
 ```
+
+**超参数设置** (论文Section 4.1):
+- α=4.0, β=0.1, τ=0.1, γ=0.95, ω=1.0, N=8
+- 同一组超参数在ALFWorld和WebShop、1.5B和7B上都接近最优
 
 **三种场景**:
 ```python
@@ -102,6 +113,19 @@ def compute_psc_weights(rewards, p, alpha, beta):
 #### 2.1.2 Step-level: 基于邻近度的软聚合
 
 **核心问题**: 在高维文本状态空间中，精确匹配会导致单例组(singleton groups)
+
+**论文实证数据** (Appendix A.2, Table 2):
+```
+ALFWorld训练过程中step-level group大小分布:
+
+Training Iteration | Group Size 1 | Group Size 2 | Group Size 3 | Group Size >3
+Iteration 40       |    36.2%     |    15.6%     |    11.2%     |    37.0%
+Iteration 80       |    34.2%     |    14.2%     |    12.3%     |    39.3%
+Iteration 120      |    30.2%     |    16.2%     |    13.6%     |    40.0%
+
+关键发现: Singleton groups (size 1) 持续占30-36%的步骤！
+这些步骤无法计算baseline，advantage = 0，完全没有学习信号。
+```
 
 **解决方案**: 用TF-IDF + 余弦相似度的软权重替代硬匹配
 
@@ -419,7 +443,107 @@ def fit(self):
 
 ---
 
-## 五、面试深度考察点
+## 五、论文理论分析与Case Study
+
+### 5.1 Z-Score信息不对称的数学证明 (论文Appendix A.1)
+
+**这是面试中展示理论深度的关键点**:
+
+```latex
+# 对于二元奖励 R ∈ {0, 1}，成功率为p：
+σ² = p(1-p)
+σ = √(p(1-p))
+
+# 成功的z-score：
+z_succ = (1-p)/√(p(1-p)) = √((1-p)/p)
+
+# 失败的z-score：
+z_fail = -p/√(p(1-p)) = -√(p/(1-p))
+
+# 关键性质：互为倒数
+z_succ(p) · z_succ(1-p) = √((1-p)/p) · √(p/(1-p)) = 1
+即：z_fail(p) = -1/z_succ(p)
+```
+
+**信息不对称问题**:
+```
+当 p → 1 (高成功率任务):
+- 成功是常见的(低信息) → z_succ → 0 (弱奖励)
+- 失败是罕见的(高信息) → |z_fail| → ∞ (强惩罚)
+→ 问题: 对噪声失败过度惩罚！
+
+当 p → 0 (低成功率任务):
+- 成功是罕见的(高信息) → z_succ → ∞ (强奖励)
+- 失败是常见的(低信息) → |z_fail| → 0 (弱惩罚)
+→ 问题: 对常见失败惩罚不足！
+
+核心问题: z-score的强度与信息价值成反比！
+```
+
+**ProxMO的修正**: PSC机制显式地根据p调整权重，放大低成功率 regime 的信号，衰减高成功率 regime 的噪声。
+
+### 5.2 Case Study: ProxMO成功 vs GPT-4o失败 (论文Section 4.6 + Appendix F)
+
+**任务**: Pick Two Objects - 找到两个遥控器放到扶手椅上
+
+**ProxMO成功轨迹 (11步)**:
+```
+Step 1: 制定策略 - "先检查边桌和沙发"（高概率位置）
+Step 2: 在sidetable 2找到remotecontrol 1
+Step 3: 立即拿到armchair 1放置 ← 关键：目标导向行为
+Step 4: 放置第一个遥控器
+Step 5: 继续搜索第二个
+Step 6-7: 检查dresser和sidetable 5
+Step 8: 在sofa 1找到remotecontrol 2
+Step 9: 拿起第二个
+Step 10: 回到armchair放置
+Step 11: 任务成功！
+```
+
+**GPT-4o失败轨迹 (14步)**:
+```
+Step 1-5: 低效搜索（先检查drawer，而不是surface）
+Step 6: 找到remotecontrol 1
+Step 7: 决定"临时存储"在cabinet ← 关键错误！Goal Drift
+Step 8: 把遥控器放到cabinet而不是armchair
+Step 9-10: 找到remotecontrol 2
+Step 11: 回到armchair发现是空的
+Step 12: 意识到错误，但已无法挽回
+Step 13-14: 尝试恢复但失败
+```
+
+**论文的关键洞察**:
+> "the agent lacks incentive to maintain explicit consistency between the global task objective and intermediate action decisions. Each action generates a local reward signal that might be individually rational given myopic heuristics, but without proximity-based state-level credit aggregation, the agent fails to recognize and penalize the divergence from global task semantics."
+
+**面试回答模板**:
+> "GPT-4o失败的原因是Goal Drift：找到第一个遥控器后，它决定'临时存储'在cabinet。这个决策在局部是合理的（cabinet是安全存储），但与全局任务目标矛盾。没有step-level的proximity-based credit assignment，agent没有激励保持目标一致性。ProxMO通过连续的语义加权确保中间决策与全局目标对齐。"
+
+### 5.3 与STEP的区别 (论文Section 5.2)
+
+```
+STEP: 在采样层面处理任务难度
+- 动态分配rollout到低成功率任务
+- 解决"收集什么数据"的问题
+
+ProxMO: 在信用分配层面处理任务难度
+- Episode-level: 调整学习强度
+- Step-level: 消除离散边界
+- 解决"如何从数据中学习"的问题
+
+两者是互补的！
+```
+
+### 5.4 Plug-and-Play特性
+
+**论文Abstract**:
+> "Crucially, ProxMO offers plug-and-play compatibility with standard GRPO frameworks, facilitating immediate, low-friction adoption in existing industrial training pipelines."
+
+**面试回答**:
+> "ProxMO可以直接集成到现有GRPO流程，只需添加PSC权重计算和TF-IDF软聚合，不需要修改模型架构。这大大降低了工业采用门槛。"
+
+---
+
+## 六、面试深度考察点
 
 ### 5.1 核心概念理解
 
